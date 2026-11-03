@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Kuryr - Prehled objednavek</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 700px;
+      margin: 30px auto;
+      padding: 0 15px;
+    }
+    h1 {
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 10px;
+    }
+    .box {
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    input {
+      padding: 6px 10px;
+      margin-right: 10px;
+    }
+    button {
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+    li {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+    }
+    .status {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Kuryrni server (port 3000)</h1>
+
+  <div class="box">
+    <h3>Nova objednavka</h3>
+    <form id="orderForm">
+      <input type="text" id="orderId" placeholder="ID objednavky" required>
+      <input type="text" id="callbackUrl" value="http://localhost:3001/update" required>
+      <button type="submit">Odeslat</button>
+    </form>
+  </div>
+
+  <div class="box">
+    <h3>Seznam objednavek</h3>
+    <ul id="ordersList">
+      <li>Nacitam data...</li>
+    </ul>
+  </div>
+
+  <script>
+    const orderInput = document.getElementById('orderId');
+    orderInput.value = 'obj_' + Math.floor(Math.random() * 1000);
+
+    async function loadOrders() {
+      try {
+        const res = await fetch('/orders');
+        const orders = await res.json();
+        const list = document.getElementById('ordersList');
+        const keys = Object.keys(orders);
+
+        if (keys.length === 0) {
+          list.innerHTML = '<li>Zadne objednavky</li>';
+          return;
+        }
+
+        list.innerHTML = keys.map(id => {
+          const item = orders[id];
+          return `<li><span><strong>${id}</strong></span> <span class="status">${item.status}</span></li>`;
+        }).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    document.getElementById('orderForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('orderId').value;
+      const callbackUrl = document.getElementById('callbackUrl').value;
+
+      await fetch('/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, callbackUrl })
+      });
+
+      orderInput.value = 'obj_' + Math.floor(Math.random() * 1000);
+      loadOrders();
+    });
+
+    loadOrders();
+    setInterval(loadOrders, 2000);
+  </script>
+</body>
+</html>

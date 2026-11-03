@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Restaurace - Stav objednavek</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 700px;
+      margin: 30px auto;
+      padding: 0 15px;
+    }
+    h1 {
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 10px;
+    }
+    .box {
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    button {
+      padding: 8px 15px;
+      cursor: pointer;
+    }
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+    li {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+    }
+    .status {
+      font-weight: bold;
+      color: #2b6cb0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Restaurace (port 3001)</h1>
+
+  <div class="box">
+    <button onclick="sendOrder()">Odeslat novou objednavku kuryrovi</button>
+  </div>
+
+  <div class="box">
+    <h3>Prijate stavy z webhooku</h3>
+    <ul id="ordersList">
+      <li>Zadne objednavky</li>
+    </ul>
+  </div>
+
+  <script>
+    async function loadOrders() {
+      try {
+        const res = await fetch('/orders');
+        const orders = await res.json();
+        const list = document.getElementById('ordersList');
+        const keys = Object.keys(orders);
+
+        if (keys.length === 0) {
+          list.innerHTML = '<li>Zadne objednavky</li>';
+          return;
+        }
+
+        list.innerHTML = keys.map(id => {
+          return `<li><span><strong>${id}</strong></span> <span class="status">${orders[id]}</span></li>`;
+        }).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function sendOrder() {
+      const id = 'obj_' + Math.floor(Math.random() * 1000);
+      try {
+        await fetch('http://localhost:3000/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            callbackUrl: 'http://localhost:3001/update'
+          })
+        });
+        loadOrders();
+      } catch (e) {
+        alert('Chyba: ' + e.message);
+      }
+    }
+
+    loadOrders();
+    setInterval(loadOrders, 2000);
+  </script>
+</body>
+</html>
