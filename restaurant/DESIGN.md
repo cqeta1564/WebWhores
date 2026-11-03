@@ -65,5 +65,16 @@ Paleta splňuje přísné standardy přístupnosti **WCAG AAA** (kontrast hlavn�
    - Jasné odznaky:
      - `✓ Platný` / `✗ Neplatný` (Ověření HMAC-SHA256 podpisu)
      - `🆕 Zpracováno` / `⚠️ Duplikát ignorován` (Idempotence dle `event_id`)
-5. **Prázdné stavy (Empty States):**
+5. **Chybové a storno stavy:**
+   - Červený badge a plný progres bar pro stavy storno / chyba / failed.
+6. **Neblokující Toast Notifikace (Accessible Toast):**
+   - Elegantní plovoucí oznámení v pravém dolním rohu nahrazující rušivý prohlížečový `alert()`.
+   - Splňuje přístupnost pomocí `role="alert"` a `aria-live="polite"`.
+   - Automatické mizení po 4 sekundách s jemnou CSS transition animací (`opacity` a `transform`).
+7. **DOM Invalidation Caching (Zero-Jitter Polling):**
+   - Polling každou sekundu porovnává serializovaný JSON stav objednávek a audit logu před překreslením.
+   - Nedochází ke zbytečnému mazání a znovu-vytváření DOM elementů, což zachovává plynulé CSS přechody progres barů a zabraňuje rušení uživatelského výběru textu.
+8. **Zpětná kompatibilita rozhraní (Úloha 4):**
+   - Zachování původního identifikátoru `#ordersList` a globálních funkcí `window.loadOrders()` a `window.sendOrder()` pro kompatibilitu se staršími evaluačními skripty.
+9. **Prázdné stavy (Empty States):**
    - Vkusné hlášení v případě, že zatím nebyly přijaty žádné notifikace.

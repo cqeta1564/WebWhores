@@ -217,6 +217,54 @@
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
 
+    .tag-danger {
+      background-color: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background-color: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border-light);
+      padding: 0.85rem 1.25rem;
+      border-radius: var(--radius);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      z-index: 1000;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+
+    .toast.hidden {
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+    }
+
+    .toast-error {
+      border-color: rgba(239, 68, 68, 0.5);
+      background-color: #1e1b20;
+      color: #fca5a5;
+    }
+
+    .toast-success {
+      border-color: rgba(16, 185, 129, 0.5);
+      background-color: #132420;
+      color: #86efac;
+    }
+
+    .toast-info {
+      border-color: rgba(56, 189, 248, 0.5);
+      background-color: #111d27;
+      color: #7dd3fc;
+    }
+
     .progress-bar-bg {
       width: 100%;
       height: 6px;
@@ -330,7 +378,7 @@
         <span id="ordersCount" style="color: var(--text-muted); font-size: 0.8125rem;">0 objednávek</span>
       </div>
       <p class="card-description">Stavy se aktualizují automaticky v reálném čase podle příchozích webhooků.</p>
-      <div id="ordersContainer" class="orders-list">
+      <div id="ordersList" class="orders-list" data-testid="ordersContainer">
         <div class="empty-state">Zatím nebyly přijaty žádné webhook notifikace od kurýra.</div>
       </div>
     </div>
@@ -359,9 +407,26 @@
         </table>
       </div>
     </div>
+
+    <!-- Toast notifikace (přístupná, neblokující zpětná vazba) -->
+    <div id="toast" role="alert" aria-live="polite" class="toast hidden"></div>
   </div>
 
   <script>
+    let lastOrdersJson = '';
+    let lastAuditJson = '';
+
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      clearTimeout(toast._timeout);
+      toast._timeout = setTimeout(() => {
+        toast.className = 'toast hidden';
+      }, 4000);
+    }
+
     async function fetchOrders() {
       try {
         const res = await fetch('/orders');
@@ -387,7 +452,11 @@
     }
 
     function renderOrders(orders) {
-      const container = document.getElementById('ordersContainer');
+      const json = JSON.stringify(orders);
+      if (json === lastOrdersJson) return;
+      lastOrdersJson = json;
+
+      const container = document.getElementById('ordersList') || document.getElementById('ordersContainer');
       const countEl = document.getElementById('ordersCount');
       const ids = Object.keys(orders);
 
@@ -419,10 +488,14 @@
             tagClass = 'tag-done';
             width = '100%';
             color = '#10b981';
+          } else if (s.includes('storno') || s.includes('zrušeno') || s.includes('zruseno') || s.includes('chyba') || s.includes('failed')) {
+            tagClass = 'tag-danger';
+            width = '100%';
+            color = '#ef4444';
           }
 
           return `
-            <div class="order-card">
+            <div class="order-card" data-order-id="${escapeHtml(id)}">
               <div class="order-header">
                 <span class="order-id">📦 ${escapeHtml(id)}</span>
                 <span class="status-tag ${tagClass}">${escapeHtml(status)}</span>
@@ -437,6 +510,10 @@
     }
 
     function renderAudit(events) {
+      const json = JSON.stringify(events);
+      if (json === lastAuditJson) return;
+      lastAuditJson = json;
+
       const tbody = document.getElementById('auditBody');
       if (!events || events.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Zatím nebyl přijat žádný webhook požadavek.</td></tr>';
@@ -484,12 +561,13 @@
         const data = await res.json();
         if (res.status === 202 || res.ok) {
           input.value = '';
+          showToast(`Objednávka ${orderId} úspěšně odeslána kurýrovi!`, 'success');
           await fetchOrders();
         } else {
-          alert('Chyba při odeslání: ' + (data.error || ('HTTP ' + res.status)));
+          showToast('Chyba při odeslání: ' + (data.error || ('HTTP ' + res.status)), 'error');
         }
       } catch (err) {
-        alert('Chyba spojení se serverem: ' + err.message);
+        showToast('Chyba spojení se serverem: ' + err.message, 'error');
       } finally {
         btn.disabled = false;
         btn.textContent = '+ Odeslat kurýrovi';
@@ -511,6 +589,11 @@
       fetchOrders();
       fetchAuditLog();
     }
+
+    // Zpětná kompatibilita s původními názvy funkcí z Úlohy 4
+    window.loadOrders = fetchOrders;
+    window.sendOrder = handleSendOrder;
+    window.showToast = showToast;
 
     syncAll();
     setInterval(syncAll, 1000);

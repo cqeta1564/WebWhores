@@ -5,7 +5,7 @@
 const http = require('http');
 const crypto = require('crypto');
 const assert = require('assert');
-const { app, orders, processedEvents, webhookEvents, SHARED_SECRET } = require('./server');
+const { app, orders, processedEvents, webhookEvents, SHARED_SECRET, MAX_PROCESSED_EVENTS, addProcessedEvent } = require('./server');
 const { sendOrder } = require('./send-order');
 
 let server;
@@ -445,6 +445,112 @@ async function runTests() {
       assert.ok(events.length > 0);
       assert.strictEqual(events[0].id, 'obj_audit');
       assert.strictEqual(events[0].signatureValid, true);
+    });
+
+    // --- Rozšířené testy bezpečnosti, robustnosti a hraničních stavů ---
+    await test('Úloha 2: sendOrder() s volbou waitForDelivery aktivně čeká na dokončení objednávky', async () => {
+      const mockCourier = await createMockCourier((req, res) => {
+        res.writeHead(202);
+        res.end();
+      });
+
+      try {
+        const orderId = 'obj_wait_cycle';
+        // Nastavíme simulovanou změnu stavu po 150ms na doručeno
+        setTimeout(async () => {
+          const payload = { id: orderId, status: 'Doručeno', event_id: 'evt_wait_done' };
+          const raw = JSON.stringify(payload);
+          await fetch(`${baseUrl}/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Signature': computeSignature(raw) },
+            body: raw
+          });
+        }, 150);
+
+        const result = await sendOrder(orderId, `${baseUrl}/update`, mockCourier.url, {
+          waitForDelivery: true,
+          timeoutMs: 3000,
+          pollIntervalMs: 50
+        });
+
+        assert.strictEqual(result.status, 202);
+        assert.strictEqual(result.finalStatus, 'Doručeno');
+        assert.strictEqual(orders[orderId], 'Doručeno');
+      } finally {
+        await mockCourier.close();
+      }
+    });
+
+    await test('Úloha 5: Ochrana proti Prototype Pollution (zakázaná ID __proto__, constructor, toString odmítnuta)', async () => {
+      const maliciousIds = ['__proto__', 'constructor', 'prototype', 'toString', 'valueOf'];
+      for (const badId of maliciousIds) {
+        const payload = { id: badId, status: 'Restaurace připravuje' };
+        const raw = JSON.stringify(payload);
+        const sig = computeSignature(raw);
+        const res = await request('/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Signature': sig },
+          body: raw
+        });
+        assert.strictEqual(res.status, 400, `ID "${badId}" mělo být odmítnuto s 400`);
+      }
+      // Ověření integrity objektu orders
+      assert.strictEqual(typeof orders.toString, 'function', 'orders.toString nesmí být přepsán');
+    });
+
+    await test('Úloha 5: Diakritika v UTF-8 a raw body HMAC výpočet', async () => {
+      const payload = {
+        id: 'obj_diakritika_ščřžýáíé',
+        status: 'Příprava delikátních špaget s parmazánem',
+        event_id: 'evt_czech_chars_1'
+      };
+      const raw = JSON.stringify(payload);
+      const sig = computeSignature(raw);
+      const res = await request('/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Signature': sig },
+        body: raw
+      });
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(orders['obj_diakritika_ščřžýáíé'], 'Příprava delikátních špaget s parmazánem');
+    });
+
+    await test('Úloha 6: Nevalidní event_id (objekty, prázdné řetězce) odmítnuty s 400', async () => {
+      const invalidEventIds = [
+        { id: 'obj_evt_err_1', status: 'Doručeno', event_id: '' },
+        { id: 'obj_evt_err_2', status: 'Doručeno', event_id: '   ' },
+        { id: 'obj_evt_err_3', status: 'Doručeno', event_id: { foo: 'bar' } },
+        { id: 'obj_evt_err_4', status: 'Doručeno', event_id: ['array'] }
+      ];
+
+      for (const p of invalidEventIds) {
+        const raw = JSON.stringify(p);
+        const sig = computeSignature(raw);
+        const res = await request('/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Signature': sig },
+          body: raw
+        });
+        assert.strictEqual(res.status, 400, `event_id ${JSON.stringify(p.event_id)} mělo vrátit 400`);
+      }
+    });
+
+    await test('Úloha 6: Paměťová stabilita – FIFO evikce v processedEvents při překročení limitu', async () => {
+      for (let i = 0; i < MAX_PROCESSED_EVENTS + 5; i++) {
+        addProcessedEvent(`evt_bulk_${i}`);
+      }
+      assert.strictEqual(processedEvents.size, MAX_PROCESSED_EVENTS, 'Velikost processedEvents nesmí překročit MAX_PROCESSED_EVENTS');
+      assert.strictEqual(processedEvents.has('evt_bulk_0'), false, 'Nejstarší event měl být odmazán');
+      assert.strictEqual(processedEvents.has(`evt_bulk_${MAX_PROCESSED_EVENTS + 4}`), true, 'Nejnovější event musí existovat');
+    });
+
+    await test('Úloha 4: Zpětná kompatibilita HTML (element #ordersList, window.loadOrders, toast notifikace)', async () => {
+      const res = await request('/');
+      const html = await res.text();
+      assert.ok(html.includes('id="ordersList"'), 'HTML musí obsahovat #ordersList pro zpětnou kompatibilitu');
+      assert.ok(html.includes('window.loadOrders'), 'HTML musí zpětně vystavovat window.loadOrders');
+      assert.ok(html.includes('window.sendOrder'), 'HTML musí zpětně vystavovat window.sendOrder');
+      assert.ok(html.includes('id="toast"'), 'HTML musí obsahovat toast container');
     });
 
   } finally {
