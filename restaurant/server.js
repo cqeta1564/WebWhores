@@ -44,10 +44,11 @@ app.post('/api/order', async (req, res) => {
   const body = req.body || {};
   const orderId = body.id || `obj_${Math.floor(Math.random() * 900 + 100)}`;
   const callbackUrl = body.callbackUrl || `http://localhost:${PORT}/update`;
+  const courierUrl = body.courierUrl || COURIER_URL;
 
   try {
-    console.log(`[Restaurace] 📤 Odesílám objednávku kurýrovi na ${COURIER_URL}:`, { id: orderId, callbackUrl });
-    const courierRes = await fetch(COURIER_URL, {
+    console.log(`[Restaurace] 📤 Odesílám objednávku kurýrovi na ${courierUrl}:`, { id: orderId, callbackUrl });
+    const courierRes = await fetch(courierUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: orderId, callbackUrl })
@@ -61,8 +62,12 @@ app.post('/api/order', async (req, res) => {
         const data = await courierRes.json();
         if (data && data.status) {
           orders[orderId] = data.status;
+        } else {
+          orders[orderId] = 'Objednávka dokončena';
         }
-      } catch (_) {}
+      } catch (_) {
+        orders[orderId] = 'Objednávka dokončena';
+      }
     }
 
     console.log(`[Restaurace] 📬 Odpověď kurýra: HTTP ${courierRes.status} (${courierRes.statusText})`);
@@ -75,7 +80,7 @@ app.post('/api/order', async (req, res) => {
   } catch (err) {
     console.error(`[Restaurace] ❌ Chyba při spojení s kurýrem:`, err.message);
     return res.status(503).json({
-      error: `Kurýrní server (${COURIER_URL}) není dostupný. Zkontrolujte, zda běží.`
+      error: `Kurýrní server (${courierUrl}) není dostupný. Zkontrolujte, zda běží.`
     });
   }
 });
@@ -86,6 +91,7 @@ app.post('/api/order', async (req, res) => {
  */
 app.post('/update', (req, res) => {
   const sigHeader = (req.get('X-Signature') || '').trim();
+  const cleanSig = sigHeader.toLowerCase().replace(/^sha256=/, '');
 
   // 1. Ověření HMAC-SHA256 podpisu (Úloha 5)
   const rawBody = req.rawBody !== undefined ? req.rawBody : JSON.stringify(req.body || {});
@@ -94,7 +100,7 @@ app.post('/update', (req, res) => {
                             .digest('hex');
 
   // Bezpečné porovnání v konstantním čase s ochranou proti rozdílným délkám bufferů
-  const sigBuffer = Buffer.from(sigHeader, 'utf8');
+  const sigBuffer = Buffer.from(cleanSig, 'utf8');
   const expectedBuffer = Buffer.from(expectedSig, 'utf8');
 
   const isValid = sigBuffer.length === expectedBuffer.length &&

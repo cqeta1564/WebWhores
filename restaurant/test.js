@@ -6,9 +6,23 @@ const http = require('http');
 const crypto = require('crypto');
 const assert = require('assert');
 const { app, orders, processedEvents, webhookEvents, SHARED_SECRET } = require('./server');
+const { sendOrder } = require('./send-order');
 
 let server;
 let baseUrl;
+
+function createMockCourier(handler) {
+  return new Promise((resolve) => {
+    const s = http.createServer(handler);
+    s.listen(0, '127.0.0.1', () => {
+      const port = s.address().port;
+      resolve({
+        url: `http://127.0.0.1:${port}/order`,
+        close: () => new Promise(res => s.close(res))
+      });
+    });
+  });
+}
 
 function computeSignature(payload, secret = SHARED_SECRET) {
   const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
@@ -62,6 +76,87 @@ async function runTests() {
   }
 
   try {
+    // --- Úloha 2: Zpracování objednávky a čekání/blokování na odpověď kurýra ---
+    await test('Úloha 2: sendOrder() čeká na synchronní blokující odpověď kurýra (HTTP 200)', async () => {
+      let courierReceived = false;
+      const mockCourier = await createMockCourier((req, res) => {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          courierReceived = true;
+          setTimeout(() => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: 'Připraveno k převzetí' }));
+          }, 30);
+        });
+      });
+
+      try {
+        const result = await sendOrder('obj_sync_test', 'http://127.0.0.1:3001/update', mockCourier.url);
+        assert.ok(courierReceived, 'Kurýr měl obdržet požadavek');
+        assert.strictEqual(result.status, 200);
+        assert.strictEqual(result.body.status, 'Připraveno k převzetí');
+      } finally {
+        await mockCourier.close();
+      }
+    });
+
+    await test('Úloha 2 & 3: sendOrder() obslouží asynchronní přijetí objednávky kurýrem (HTTP 202 Accepted)', async () => {
+      const mockCourier = await createMockCourier((req, res) => {
+        res.writeHead(202);
+        res.end();
+      });
+
+      try {
+        const result = await sendOrder('obj_async_test', 'http://127.0.0.1:3001/update', mockCourier.url);
+        assert.strictEqual(result.status, 202);
+      } finally {
+        await mockCourier.close();
+      }
+    });
+
+    await test('Úloha 2: POST /api/order proxy předá objednávku kurýrovi a nastaví iniciální stav', async () => {
+      let courierPayload = null;
+      const mockCourier = await createMockCourier((req, res) => {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          courierPayload = JSON.parse(body);
+          res.writeHead(202);
+          res.end();
+        });
+      });
+
+      try {
+        const res = await request('/api/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: 'obj_proxy_1', courierUrl: mockCourier.url })
+        });
+
+        assert.strictEqual(res.status, 202);
+        const data = await res.json();
+        assert.strictEqual(data.success, true);
+        assert.strictEqual(data.id, 'obj_proxy_1');
+        assert.strictEqual(courierPayload.id, 'obj_proxy_1');
+        assert.strictEqual(orders['obj_proxy_1'], 'Žádost o objednávku');
+      } finally {
+        await mockCourier.close();
+      }
+    });
+
+    await test('Úloha 2: POST /api/order vrátí 503 při nedostupném kurýrovi', async () => {
+      const res = await request('/api/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: 'obj_offline', courierUrl: 'http://127.0.0.1:59999/order' })
+      });
+
+      assert.strictEqual(res.status, 503);
+      const data = await res.json();
+      assert.ok(data.error.includes('není dostupný'));
+    });
+
     // --- Úloha 4: Servírování statického obsahu a GET /orders ---
     await test('Úloha 4: GET / vrátí HTML stránku index.html', async () => {
       const res = await request('/');
@@ -217,6 +312,32 @@ async function runTests() {
         });
         assert.strictEqual(res.status, 401, `Signatura "${sig.substring(0, 10)}..." měla selhat s 401`);
       }
+    });
+
+    await test('Úloha 5: Webhook akceptuje validní X-Signature s prefixem sha256= i velkými písmeny', async () => {
+      const payload = { id: 'obj_sig_formats', status: 'Restaurace připravuje' };
+      const raw = JSON.stringify(payload);
+      const hex = computeSignature(raw);
+
+      // 1. Otestování velkých písmen
+      const resUpper = await request('/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Signature': hex.toUpperCase() },
+        body: raw
+      });
+      assert.strictEqual(resUpper.status, 200);
+
+      // 2. Otestování s prefixem sha256= (běžný standard webhooků)
+      const payload2 = { id: 'obj_sig_prefix', status: 'Rozváží se' };
+      const raw2 = JSON.stringify(payload2);
+      const hex2 = computeSignature(raw2);
+      const resPrefix = await request('/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Signature': `sha256=${hex2}` },
+        body: raw2
+      });
+      assert.strictEqual(resPrefix.status, 200);
+      assert.strictEqual(orders['obj_sig_prefix'], 'Rozváží se');
     });
 
     // --- Úloha 6: Ošetření duplicitních notifikací (idempotence) ---

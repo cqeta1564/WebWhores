@@ -6,9 +6,10 @@
 const COURIER_URL = process.env.COURIER_URL || 'http://localhost:3000/order';
 const RESTAURANT_PORT = process.env.PORT || 3001;
 
-async function sendOrder(customId, customCallbackUrl) {
+async function sendOrder(customId, customCallbackUrl, customCourierUrl) {
   const orderId = customId || process.argv[2] || `obj_${Math.floor(Math.random() * 900 + 100)}`;
   const callbackUrl = customCallbackUrl || process.argv[3] || `http://localhost:${RESTAURANT_PORT}/update`;
+  const courierUrl = customCourierUrl || COURIER_URL;
 
   const orderPayload = {
     id: orderId,
@@ -18,7 +19,7 @@ async function sendOrder(customId, customCallbackUrl) {
   console.log(`[Restaurace] 📤 Odesílám objednávku:`, orderPayload);
 
   try {
-    const res = await fetch(COURIER_URL, {
+    const res = await fetch(courierUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(orderPayload)
