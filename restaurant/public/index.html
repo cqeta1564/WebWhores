@@ -2,98 +2,518 @@
 <html lang="cs">
 <head>
   <meta charset="UTF-8">
-  <title>Restaurace - Stav objednavek</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Restaurace — Sledování stavu objednávek</title>
   <style>
-    body {
-      font-family: sans-serif;
-      max-width: 700px;
-      margin: 30px auto;
-      padding: 0 15px;
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-elevated: #334155;
+      --border: #334155;
+      --border-light: #475569;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #c2410c;
+      --accent-hover: #9a3412;
+      --success: #10b981;
+      --info: #38bdf8;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 8px;
     }
-    h1 {
-      border-bottom: 2px solid #ccc;
-      padding-bottom: 10px;
-    }
-    .box {
-      border: 1px solid #ddd;
-      padding: 15px;
-      margin-bottom: 20px;
-      border-radius: 4px;
-    }
-    button {
-      padding: 8px 15px;
-      cursor: pointer;
-    }
-    ul {
-      list-style-type: none;
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
       padding: 0;
     }
-    li {
-      padding: 10px;
-      border-bottom: 1px solid #eee;
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    header {
       display: flex;
       justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1.25rem;
+      flex-wrap: wrap;
+      gap: 1rem;
     }
-    .status {
-      font-weight: bold;
-      color: #2b6cb0;
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .subhead {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .live-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background-color: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--success);
+      border-radius: 50%;
+    }
+
+    .card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--text);
+    }
+
+    .card-description {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .order-form {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .input-group {
+      flex: 1;
+      min-width: 220px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      background-color: var(--bg);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 0.9375rem;
+    }
+
+    input[type="text"]:focus {
+      outline: 2px solid var(--accent);
+      border-color: transparent;
+    }
+
+    button {
+      background-color: var(--accent);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 0.65rem 1.25rem;
+      font-weight: 600;
+      font-size: 0.9375rem;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      white-space: nowrap;
+    }
+
+    button:hover:not(:disabled) {
+      background-color: var(--accent-hover);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .orders-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .order-card {
+      background-color: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+    }
+
+    .order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .order-id {
+      font-weight: 700;
+      font-size: 1rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .status-tag {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+    }
+
+    .tag-init {
+      background-color: rgba(148, 163, 184, 0.15);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+
+    .tag-prep {
+      background-color: rgba(56, 189, 248, 0.15);
+      color: var(--info);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .tag-delivering {
+      background-color: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .tag-done {
+      background-color: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background-color: var(--surface);
+      border-radius: 9999px;
+      overflow: hidden;
+      margin-top: 0.65rem;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      transition: width 0.4s ease, background-color 0.4s ease;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 2.5rem 1rem;
+      color: var(--text-muted);
+      font-size: 0.9375rem;
+    }
+
+    .audit-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      margin-top: 0.75rem;
+    }
+
+    .audit-table th {
+      text-align: left;
+      padding: 0.65rem 0.75rem;
+      border-bottom: 2px solid var(--border);
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .audit-table td {
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .badge-sig {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.75rem;
+      background-color: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+    }
+
+    .badge-dup {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.75rem;
+      background-color: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+    }
+
+    .badge-new {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.75rem;
+      background-color: rgba(56, 189, 248, 0.15);
+      color: var(--info);
+    }
+
+    .audit-log-container {
+      max-height: 280px;
+      overflow-y: auto;
     }
   </style>
 </head>
 <body>
-  <h1>Restaurace (port 3001)</h1>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <h1>🍕 Restaurace — Dashboard objednávek</h1>
+        <p class="subhead">REST API & Webhook klient (SPŠE Ječná | Port 3001)</p>
+      </div>
+      <div class="live-status">
+        <span class="status-dot"></span>
+        <span id="syncLabel">Live Polling (1s)</span>
+      </div>
+    </header>
 
-  <div class="box">
-    <button onclick="sendOrder()">Odeslat novou objednavku kuryrovi</button>
-  </div>
+    <!-- Karta pro vytvoření objednávky -->
+    <div class="card">
+      <h2 class="card-title">Vytvořit a odeslat objednávku</h2>
+      <p class="card-description">Odešle HTTP POST požadavek na kurýrní server (http://localhost:3000/order) s adresou zpětného volání (callbackUrl).</p>
+      <div class="order-form">
+        <div class="input-group">
+          <input type="text" id="orderIdInput" placeholder="ID objednávky (např. obj_101, prázdné = náhodné)">
+        </div>
+        <button id="btnSendOrder" onclick="handleSendOrder()">+ Odeslat kurýrovi</button>
+      </div>
+    </div>
 
-  <div class="box">
-    <h3>Prijate stavy z webhooku</h3>
-    <ul id="ordersList">
-      <li>Zadne objednavky</li>
-    </ul>
+    <!-- Karta přehledu objednávek (Úloha 4) -->
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem;">
+        <h2 class="card-title">Aktivní objednávky (GET /orders)</h2>
+        <span id="ordersCount" style="color: var(--text-muted); font-size: 0.8125rem;">0 objednávek</span>
+      </div>
+      <p class="card-description">Stavy se aktualizují automaticky v reálném čase podle příchozích webhooků.</p>
+      <div id="ordersContainer" class="orders-list">
+        <div class="empty-state">Zatím nebyly přijaty žádné webhook notifikace od kurýra.</div>
+      </div>
+    </div>
+
+    <!-- Karta auditu webhooků (Úloha 5 & 6) -->
+    <div class="card">
+      <h2 class="card-title">Audit přijatých webhooků (Úloha 5 &amp; 6)</h2>
+      <p class="card-description">Přehled ověření kryptografického podpisu (HMAC-SHA256) a detekce duplicit (event_id idempotence).</p>
+      <div class="audit-log-container">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th>Čas</th>
+              <th>Objednávka</th>
+              <th>Event ID</th>
+              <th>Stav</th>
+              <th>X-Signature</th>
+              <th>Výsledek</th>
+            </tr>
+          </thead>
+          <tbody id="auditBody">
+            <tr>
+              <td colspan="6" class="empty-state">Zatím nebyl přijat žádný webhook požadavek.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <script>
-    async function loadOrders() {
+    async function fetchOrders() {
       try {
         const res = await fetch('/orders');
-        const orders = await res.json();
-        const list = document.getElementById('ordersList');
-        const keys = Object.keys(orders);
-
-        if (keys.length === 0) {
-          list.innerHTML = '<li>Zadne objednavky</li>';
-          return;
+        if (res.ok) {
+          const orders = await res.json();
+          renderOrders(orders);
         }
-
-        list.innerHTML = keys.map(id => {
-          return `<li><span><strong>${id}</strong></span> <span class="status">${orders[id]}</span></li>`;
-        }).join('');
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        console.error('Chyba při načítání /orders:', err);
       }
     }
 
-    async function sendOrder() {
-      const id = 'obj_' + Math.floor(Math.random() * 1000);
+    async function fetchAuditLog() {
       try {
-        await fetch('http://localhost:3000/order', {
+        const res = await fetch('/api/events');
+        if (res.ok) {
+          const events = await res.json();
+          renderAudit(events);
+        }
+      } catch (err) {
+        console.error('Chyba při načítání /api/events:', err);
+      }
+    }
+
+    function renderOrders(orders) {
+      const container = document.getElementById('ordersContainer');
+      const countEl = document.getElementById('ordersCount');
+      const ids = Object.keys(orders);
+
+      countEl.textContent = `${ids.length} ${ids.length === 1 ? 'objednávka' : ids.length < 5 ? 'objednávky' : 'objednávek'}`;
+
+      if (ids.length === 0) {
+        container.innerHTML = '<div class="empty-state">Zatím nebyly přijaty žádné webhook notifikace od kurýra.</div>';
+        return;
+      }
+
+      container.innerHTML = ids
+        .reverse()
+        .map(id => {
+          const status = orders[id] || '';
+          let tagClass = 'tag-init';
+          let width = '20%';
+          let color = '#94a3b8';
+
+          const s = status.toLowerCase();
+          if (s.includes('připravuje') || s.includes('pripravuje')) {
+            tagClass = 'tag-prep';
+            width = '45%';
+            color = '#38bdf8';
+          } else if (s.includes('rozváží') || s.includes('rozvazi')) {
+            tagClass = 'tag-delivering';
+            width = '75%';
+            color = '#f59e0b';
+          } else if (s.includes('doručeno') || s.includes('doruceno')) {
+            tagClass = 'tag-done';
+            width = '100%';
+            color = '#10b981';
+          }
+
+          return `
+            <div class="order-card">
+              <div class="order-header">
+                <span class="order-id">📦 ${escapeHtml(id)}</span>
+                <span class="status-tag ${tagClass}">${escapeHtml(status)}</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: ${width}; background-color: ${color};"></div>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    function renderAudit(events) {
+      const tbody = document.getElementById('auditBody');
+      if (!events || events.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Zatím nebyl přijat žádný webhook požadavek.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = events.slice(0, 15).map(evt => {
+        const sigBadge = evt.signatureValid
+          ? '<span class="badge-sig">✓ Platný</span>'
+          : '<span style="color: var(--danger); font-weight:600;">✗ Neplatný</span>';
+
+        const dupBadge = evt.isDuplicate
+          ? '<span class="badge-dup">⚠️ Duplikát ignorován</span>'
+          : '<span class="badge-new">🆕 Zpracováno</span>';
+
+        return `
+          <tr>
+            <td>${escapeHtml(evt.timestamp || '')}</td>
+            <td><strong>${escapeHtml(evt.id || '')}</strong></td>
+            <td><code>${escapeHtml(evt.event_id || 'n/a')}</code></td>
+            <td>${escapeHtml(evt.status || '')}</td>
+            <td>${sigBadge}</td>
+            <td>${dupBadge}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function handleSendOrder() {
+      const btn = document.getElementById('btnSendOrder');
+      const input = document.getElementById('orderIdInput');
+      const rawId = input.value.trim();
+      const orderId = rawId || `obj_${Math.floor(Math.random() * 900 + 100)}`;
+
+      btn.disabled = true;
+      btn.textContent = 'Odesílám...';
+
+      try {
+        const res = await fetch('/api/order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id,
-            callbackUrl: 'http://localhost:3001/update'
-          })
+          body: JSON.stringify({ id: orderId })
         });
-        loadOrders();
-      } catch (e) {
-        alert('Chyba: ' + e.message);
+
+        const data = await res.json();
+        if (res.status === 202 || res.ok) {
+          input.value = '';
+          await fetchOrders();
+        } else {
+          alert('Chyba při odeslání: ' + (data.error || ('HTTP ' + res.status)));
+        }
+      } catch (err) {
+        alert('Chyba spojení se serverem: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '+ Odeslat kurýrovi';
       }
     }
 
-    loadOrders();
-    setInterval(loadOrders, 2000);
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>"']/g, m => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      }[m]));
+    }
+
+    function syncAll() {
+      fetchOrders();
+      fetchAuditLog();
+    }
+
+    syncAll();
+    setInterval(syncAll, 1000);
   </script>
 </body>
 </html>

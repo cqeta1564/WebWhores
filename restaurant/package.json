@@ -1,15 +1,15 @@
 {
-  "name": "restaurant",
+  "name": "restaurant-server",
   "version": "1.0.0",
-  "description": "",
+  "description": "Server restaurace pro odesílání objednávek a příjem webhooků",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "send-order": "node send-order.js"
+    "dev": "node --watch server.js",
+    "send-order": "node send-order.js",
+    "test": "node test.js",
+    "test:e2e": "node e2e-test.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "express": "^4.21.2"
   }
